@@ -100,6 +100,20 @@
         #region Methods
 
         /// <summary>
+        /// Determines whether a codec is lossless-only according to its static descriptor.
+        /// Replaces the removed <c>AVCodecContext.properties</c> lossless flag (FFmpeg 9).
+        /// </summary>
+        /// <param name="codecId">The codec identifier.</param>
+        /// <returns>True if the codec is flagged lossless and not flagged lossy.</returns>
+        private static bool IsLosslessCodec(AVCodecID codecId)
+        {
+            var descriptor = ffmpeg.avcodec_descriptor_get(codecId);
+            if (descriptor == null) return false;
+            return (descriptor->props & ffmpeg.AV_CODEC_PROP_LOSSLESS) != 0
+                && (descriptor->props & ffmpeg.AV_CODEC_PROP_LOSSY) == 0;
+        }
+
+        /// <summary>
         /// Extracts the stream infos from the input.
         /// </summary>
         /// <param name="inputContext">The input context.</param>
@@ -138,8 +152,11 @@
                     ColorRange = codecContext->color_range,
                     PixelWidth = codecContext->width,
                     PixelHeight = codecContext->height,
-                    HasClosedCaptions = (codecContext->properties & ffmpeg.FF_CODEC_PROPERTY_CLOSED_CAPTIONS) != 0,
-                    IsLossless = (codecContext->properties & ffmpeg.FF_CODEC_PROPERTY_LOSSLESS) != 0,
+                    /*AVCodecContext.properties was removed in FFmpeg 9 and was never populated on this
+                    unopened probe context anyway. Closed captions are detected lazily from A53_CC
+                    side data while decoding (see VideoComponent / MediaEngineState).*/
+                    HasClosedCaptions = false,
+                    IsLossless = IsLosslessCodec(codecContext->codec_id),
                     Channels = codecContext->ch_layout.nb_channels,
                     BitRate = bitsPerSample > 0 ?
                         bitsPerSample * codecContext->ch_layout.nb_channels * codecContext->sample_rate :
